@@ -1,5 +1,6 @@
 package io.muserver;
 
+import io.netty.util.concurrent.Future;
 import okhttp3.Response;
 import org.junit.After;
 import org.junit.Test;
@@ -68,9 +69,9 @@ public class MuServerTest {
 		server = httpServer()
 				.withHttpConnection(12808)
 				.addAsyncHandler(new AsyncMuHandler() {
-					public boolean onHeaders(AsyncContext ctx, Headers headers) {
+					public Future<Boolean> onHeaders(AsyncContext ctx, Headers headers) {
 						System.out.println("I am a logging handler and saw " + ctx.request);
-						return false;
+						return ctx.wasNotHandled();
 					}
 
 					public void onRequestData(AsyncContext ctx, ByteBuffer buffer) {
@@ -80,10 +81,10 @@ public class MuServerTest {
 					}
 				})
 				.addAsyncHandler(new AsyncMuHandler() {
-					public boolean onHeaders(AsyncContext ctx, Headers headers) {
+					public Future<Boolean> onHeaders(AsyncContext ctx, Headers headers) {
 						System.out.println("Request starting");
 						ctx.response.status(201);
-						return true;
+						return ctx.wasHandled();
 					}
 
 					public void onRequestData(AsyncContext ctx, ByteBuffer buffer) {
@@ -97,7 +98,7 @@ public class MuServerTest {
 					}
 				})
 				.addAsyncHandler(new AsyncMuHandler() {
-					public boolean onHeaders(AsyncContext ctx, Headers headers) {
+					public Future<Boolean> onHeaders(AsyncContext ctx, Headers headers) {
 						throw new RuntimeException("This should never get here");
 					}
 

@@ -2,6 +2,7 @@ package io.muserver;
 
 import io.muserver.rest.PathMatch;
 import io.muserver.rest.UriPattern;
+import io.netty.util.concurrent.Future;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
@@ -20,7 +21,7 @@ class RouteHandlerAdapter implements AsyncMuHandler {
         this.method = method;
     }
 
-    public boolean onHeaders(AsyncContext ctx, Headers headers) throws Exception {
+    public Future<Boolean> onHeaders(AsyncContext ctx, Headers headers) throws Exception {
 
         MuRequest request = ctx.request;
         boolean methodMatches = method == null || method.equals(request.method());
@@ -38,11 +39,11 @@ class RouteHandlerAdapter implements AsyncMuHandler {
                         ctx.complete();
                     }
                 });
-                return true;
+                return ctx.wasHandled();
             }
         }
 
-        return false;
+        return ctx.wasNotHandled();
 	}
 
     public void onRequestData(AsyncContext ctx, ByteBuffer buffer) {

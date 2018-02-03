@@ -3,6 +3,7 @@ package io.muserver.handlers;
 import io.muserver.AsyncContext;
 import io.muserver.AsyncMuHandler;
 import io.muserver.Headers;
+import io.netty.util.concurrent.Future;
 
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -32,16 +33,16 @@ public class HttpToHttpsRedirector implements AsyncMuHandler {
         this.httpsPort = httpsPort;
     }
 
-    public boolean onHeaders(AsyncContext ctx, Headers headers) throws Exception {
+    public Future<Boolean> onHeaders(AsyncContext ctx, Headers headers) throws Exception {
         URI uri = ctx.request.uri();
         boolean isHttp = uri.getScheme().equals("http");
         if (!isHttp) {
-            return false;
+            return ctx.wasNotHandled();
         }
         URI newURI = new URI("https", uri.getUserInfo(), uri.getHost(), httpsPort, uri.getPath(), uri.getQuery(), uri.getFragment());
         ctx.response.redirect(newURI);
         ctx.complete();
-        return true;
+        return ctx.wasHandled();
     }
 
     public void onRequestData(AsyncContext ctx, ByteBuffer buffer) throws Exception {

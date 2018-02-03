@@ -3,6 +3,7 @@ package io.muserver;
 import io.muserver.handlers.ResourceType;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -19,6 +20,7 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -185,6 +187,8 @@ public class MuServerBuilder {
                         p.addLast("compressor", new SelectiveHttpContentCompressor(minimumGzipSize, mimeTypesToGzip));
                     }
                     p.addLast("muhandler", new MuServerHandler(asyncHandlers));
+
+                    p.addLast("catchall", new CatchAllHandler());
                 }
             });
         return b.bind(port).sync().channel();

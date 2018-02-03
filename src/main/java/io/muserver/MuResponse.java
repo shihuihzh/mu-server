@@ -144,7 +144,7 @@ class NettyResponseAdaptor implements MuResponse {
 		return new PrintWriter(new OutputStreamWriter(outputStream(bufferSizeInChars), StandardCharsets.UTF_8));
 	}
 
-	public Future<Void> complete() {
+	public io.netty.util.concurrent.Future<Void> complete() {
 		ensureHeadersWritten();
         ChannelFuture completeFuture = ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
         if (!keepAlive) {
