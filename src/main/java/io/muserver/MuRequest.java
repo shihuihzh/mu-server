@@ -120,12 +120,14 @@ public interface MuRequest {
 
     /**
      * Gets all the client-sent cookies
+     *
      * @return A set of cookie objects
      */
     Set<Cookie> cookies();
 
     /**
      * Gets the value of the client-sent cookie with the given name
+     *
      * @param name The name of the cookie
      * @return The cookie, or {@link Optional#empty()} if there is no cookie with that name.
      */
@@ -140,7 +142,7 @@ class NettyRequestAdapter implements MuRequest {
     private final QueryStringDecoder queryStringDecoder;
     private final Method method;
     private final Headers headers;
-    private GrowableByteBufferInputStream inputStream;
+    private final GrowableByteBufferInputStream inputStream;
     private QueryStringDecoder formDecoder;
     private boolean bodyRead = false;
     private Set<Cookie> cookies;
@@ -152,6 +154,9 @@ class NettyRequestAdapter implements MuRequest {
         this.queryStringDecoder = new QueryStringDecoder(request.uri(), true);
         this.method = Method.fromNetty(request.method());
         this.headers = new Headers(request.headers());
+
+        boolean hasBody = headers.contains(HeaderNames.TRANSFER_ENCODING) || headers.getInt(HeaderNames.CONTENT_LENGTH, -1) > 0;
+        inputStream = hasBody ? new GrowableByteBufferInputStream() : null;
     }
 
     boolean isKeepAliveRequested() {
@@ -189,15 +194,18 @@ class NettyRequestAdapter implements MuRequest {
 
     void feed(ByteBuffer buffer) {
         if (inputStream == null) {
-            inputStream = new GrowableByteBufferInputStream();
+            throw new IllegalStateException("Didn't expect a method body");
         }
         inputStream.handOff(buffer);
     }
+
     void requestBodyComplete() {
-        try {
-            inputStream.close();
-        } catch (IOException ignored) {
-            System.err.println("This should not be possible");
+        if (inputStream != null) {
+            try {
+                inputStream.close();
+            } catch (IOException ignored) {
+                System.err.println("This should not be possible");
+            }
         }
     }
 
@@ -206,9 +214,6 @@ class NettyRequestAdapter implements MuRequest {
         if (!hasBody) {
             return Optional.empty();
         } else {
-            if (inputStream == null) {
-                inputStream = new GrowableByteBufferInputStream();
-            }
             claimingBodyRead();
             return Optional.of(inputStream);
         }
@@ -216,7 +221,7 @@ class NettyRequestAdapter implements MuRequest {
 
 
     public String readBodyAsString() throws IOException {
-        if (inputStream().isPresent()) {
+        if (inputStream != null) {
             claimingBodyRead();
             byte[] bytes = Mutils.toByteArray(inputStream, 2048);
             return new String(bytes, UTF_8); // TODO: respect the charset of the content-type if provided
