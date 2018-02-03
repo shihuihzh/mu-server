@@ -1,6 +1,5 @@
 package io.muserver;
 
-import io.muserver.rest.PathMatch;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -10,10 +9,14 @@ import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.util.*;
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static io.muserver.Cookie.nettyToMu;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.emptySet;
 
 public interface MuRequest {
@@ -137,7 +140,7 @@ class NettyRequestAdapter implements MuRequest {
     private final QueryStringDecoder queryStringDecoder;
     private final Method method;
     private final Headers headers;
-    private InputStream inputStream;
+    private GrowableByteBufferInputStream inputStream;
     private QueryStringDecoder formDecoder;
     private boolean bodyRead = false;
     private Set<Cookie> cookies;
@@ -184,11 +187,28 @@ class NettyRequestAdapter implements MuRequest {
         return headers;
     }
 
+    void feed(ByteBuffer buffer) {
+        if (inputStream == null) {
+            inputStream = new GrowableByteBufferInputStream();
+        }
+        inputStream.handOff(buffer);
+    }
+    void requestBodyComplete() {
+        try {
+            inputStream.close();
+        } catch (IOException ignored) {
+            System.err.println("This should not be possible");
+        }
+    }
 
     public Optional<InputStream> inputStream() {
-        if (inputStream == null) {
+        boolean hasBody = headers.contains(HeaderNames.TRANSFER_ENCODING) || headers.getInt(HeaderNames.CONTENT_LENGTH, -1) > 0;
+        if (!hasBody) {
             return Optional.empty();
         } else {
+            if (inputStream == null) {
+                inputStream = new GrowableByteBufferInputStream();
+            }
             claimingBodyRead();
             return Optional.of(inputStream);
         }
@@ -196,7 +216,7 @@ class NettyRequestAdapter implements MuRequest {
 
 
     public String readBodyAsString() throws IOException {
-        if (inputStream != null) {
+        if (inputStream().isPresent()) {
             claimingBodyRead();
             byte[] bytes = Mutils.toByteArray(inputStream, 2048);
             return new String(bytes, UTF_8); // TODO: respect the charset of the content-type if provided
@@ -279,10 +299,6 @@ class NettyRequestAdapter implements MuRequest {
             String body = readBodyAsString();
             formDecoder = new QueryStringDecoder(body, false);
         }
-    }
-
-    void inputStream(InputStream stream) {
-        this.inputStream = stream;
     }
 
     public String toString() {

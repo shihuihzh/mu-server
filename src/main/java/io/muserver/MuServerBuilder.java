@@ -20,6 +20,8 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static io.muserver.MuServerHandler.PROTO_ATTRIBUTE;
@@ -32,10 +34,10 @@ public class MuServerBuilder {
     private int maxHeadersSize = 8192;
     private int maxUrlSize = 8192 - LENGTH_OF_METHOD_AND_PROTOCOL;
     private List<AsyncMuHandler> asyncHandlers = new ArrayList<>();
-    private List<MuHandler> handlers = new ArrayList<>();
     private SSLContext sslContext;
     private boolean gzipEnabled = true;
     private Set<String> mimeTypesToGzip = ResourceType.gzippableMimeTypes(ResourceType.getResourceTypes());
+    private ExecutorService handlerExecutorService = Executors.newCachedThreadPool();
 
     public MuServerBuilder withHttpConnection(int port) {
         this.httpPort = port;
@@ -89,7 +91,12 @@ public class MuServerBuilder {
         return addHandler(handler.build());
     }
     public MuServerBuilder addHandler(MuHandler handler) {
-        handlers.add(handler);
+        asyncHandlers.add(new SyncHandlerAdapter(handler));
+        return this;
+    }
+
+    public MuServerBuilder withHandlerExecutorService(ExecutorService handlerExecutorService) {
+        this.handlerExecutorService = handlerExecutorService;
         return this;
     }
 
@@ -105,14 +112,11 @@ public class MuServerBuilder {
      * @return Returns the server builder
      */
     public MuServerBuilder addHandler(Method method, String uriTemplate, RouteHandler handler) {
-        return addHandler(Routes.route(method, uriTemplate, handler));
+        return addAsyncHandler(new RouteHandlerAdapter(method, uriTemplate, handlerExecutorService, handler));
     }
 
 
     public MuServer start() {
-        if (!handlers.isEmpty()) {
-            asyncHandlers.add(new SyncHandlerAdapter(handlers));
-        }
         NioEventLoopGroup bossGroup = new NioEventLoopGroup(1);
         NioEventLoopGroup workerGroup = new NioEventLoopGroup();
         List<Channel> channels = new ArrayList<>();
